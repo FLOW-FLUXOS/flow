@@ -14,7 +14,15 @@
 <div class="main-content">
     <h2 class="centerTEXT">Bem-vindo(a), {{ request.user.username }}!</h2>
 
-    <p class="centerTEXT" style="color: white; font-size: 25px; margin-top: -50px;">Esta é a página inicial do sistema.</p>
+    <p class="centerTEXT" style="color: white; font-size: 25px; margin-top: -50px;">{{ request.user.empresa.nome }}</p>
+    {% if messages %}{% for message in messages %}<p class="centerTEXT" style="color:#ff6b6b;">{{ message }}</p>{% endfor %}{% endif %}
+    <p class="centerTEXT" style="font-size: 22px;">
+        {% if pendentes %}
+            <a href="{% url 'listar_instancias_fluxo' %}?aba=pendentes" style="color:#f9d54a;">Você tem {{ pendentes }} fluxo{{ pendentes|pluralize }} aguardando sua aprovação →</a>
+        {% else %}
+            <span style="color:#48b96d;">Nenhum fluxo aguardando sua aprovação.</span>
+        {% endif %}
+    </p>
 
     
     </div>

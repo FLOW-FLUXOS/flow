@@ -60,15 +60,19 @@
 
             <h2 class="text-center mb-5">Escolha seu Plano</h2>
 
-            {% if assinatura %}
+            {% if messages %}{% for message in messages %}
+            <div class="status-card" style="border-color:#ff3b3b;">{{ message }}</div>
+            {% endfor %}{% endif %}
+
             <!-- ⚡ Status atual da assinatura -->
             <div class="status-card">
-                <div class="status-title">Plano Atual: {{ assinatura.plano|title }}</div>
+                <div class="status-title">Plano Atual: {{ empresa.plano_atual|title }}</div>
                 <div class="dias-restantes">
-                    Dias restantes: <strong>{{ dias_restantes }}</strong>
+                    Usuários: <strong>{{ empresa.total_usuarios }}</strong> de
+                    <strong>{% if empresa.limite_usuarios %}{{ empresa.limite_usuarios }}{% else %}ilimitado{% endif %}</strong>
+                    {% if dias_restantes is not None %} &nbsp;|&nbsp; Dias restantes: <strong>{{ dias_restantes }}</strong>{% endif %}
                 </div>
             </div>
-            {% endif %}
 
             <!-- 🔥 Planos lado a lado -->
             <div class="planos-container">
@@ -120,6 +124,26 @@
                 </div>
 
             </div> <!-- /planos-container -->
+
+            <h3 style="margin-top:40px;">Histórico de pagamentos</h3>
+            {% if erro_pagamentos %}
+                <div class="status-card" style="border-color:#ff3b3b;">{{ erro_pagamentos }}</div>
+            {% elif cobrancas %}
+            <table>
+                <tr><th>Data</th><th>Plano</th><th>Valor</th><th>Status</th><th></th></tr>
+                {% for c in cobrancas %}
+                <tr>
+                    <td>{{ c.criado_em|slice:":10" }}</td>
+                    <td>{{ c.plano|title }}</td>
+                    <td>{{ c.valor_formatado }}</td>
+                    <td>{{ c.status|title }}</td>
+                    <td>{% if c.status == "pendente" %}<a class="a-detalhes" href="{{ c.checkout_url }}" target="_blank">Pagar</a>{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            {% else %}
+                <p>Nenhum pagamento ainda.</p>
+            {% endif %}
 
         </div>
     </div>

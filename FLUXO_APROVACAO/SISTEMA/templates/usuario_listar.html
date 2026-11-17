@@ -26,6 +26,7 @@
 
     </div>
     <hr>
+    {% if messages %}{% for message in messages %}<p style="color:#ff6b6b;">{{ message }}</p>{% endfor %}{% endif %}
     <table class="table table-bordered">
         <thead>
             <tr>

@@ -15,7 +15,11 @@
 <body style="padding: 30px;">
 
     <!-- BOTÃO VOLTAR -->
-    <a href="/fluxos/instancias/" class="btn-voltar"> <img style="width: 30px; height: 30px; padding-right: 3px;" src="/static/img/back.png" > Voltar</a>
+    <a href="{% url 'listar_instancias_fluxo' %}" class="btn-voltar"> <img style="width: 30px; height: 30px; padding-right: 3px;" src="/static/img/back.png" > Voltar</a>
+
+    {% if messages %}{% for message in messages %}
+    <div class="card" style="padding:12px 20px;"><strong>{{ message }}</strong></div>
+    {% endfor %}{% endif %}
 
     <div class="card">
         <h1>{{ instancia.nome }}</h1>
@@ -24,6 +28,12 @@
             Status: <strong>{% if instancia.finalizado %}Finalizado{% else %}Em andamento{% endif %}</strong> |
             Criado em: {{ instancia.criado_em|date:"d/m/Y H:i" }}
         </div>
+
+        {% if pode_aprovar %}
+        <p style="color:#f9d54a; margin:6px 0 0;"><strong>Esta etapa aguarda a sua aprovação.</strong> Clique na etapa atual para aprovar ou retornar.</p>
+        {% elif etapa_atual %}
+        <p style="color:#9fb3c8; margin:6px 0 0;">Aguardando aprovação de: <strong>{{ etapa_atual.setor.nome|default:"qualquer usuário" }}{% if etapa_atual.perfil_aprovador == "administrador" %} (administrador){% endif %}</strong></p>
+        {% endif %}
 
         <div style="position:relative;">
             <div class="line" aria-hidden="true"></div>
@@ -34,7 +44,7 @@
                 <div class="stage" 
                     data-etapa-id="{{ etapa.id }}" 
                     data-ordem="{{ etapa.ordem_etapa }}"
-                    onclick="abrirModal(this)">
+                    {% if etapa.id == etapa_atual.id and pode_aprovar %}onclick="abrirModal(this)" style="cursor:pointer;" title="Clique para aprovar ou retornar"{% endif %}>
                     
                     <span class="dot 
                         {% if etapa.concluida %}done
@@ -121,8 +131,8 @@
             const btnRet = document.getElementById('btn-retornar');
             const btnAv = document.getElementById('btn-avancar');
 
-            // se primeira etapa -> desabilitar retornar
-            if (ordem === 1) {
+            // se não pode retornar (primeira etapa) -> desabilitar
+            if ({% if pode_retornar %}false{% else %}true{% endif %}) {
                 btnRet.disabled = true;
                 btnRet.style.opacity = 0.6;
             } else {

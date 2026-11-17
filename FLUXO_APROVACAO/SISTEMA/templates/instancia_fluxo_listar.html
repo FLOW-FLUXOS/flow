@@ -22,8 +22,9 @@
     
 
     <div class="tab">
-        <button class="tablinks active" onclick="openTab(event, 'andamento')"> Andamento</button>
-        <button class="tablinks" onclick="openTab(event, 'finalizado')"> Finalizados</button>
+        <button class="tablinks {% if aba == 'pendentes' %}active{% endif %}" onclick="openTab(event, 'pendentes')"> Minhas aprovações{% if pendentes %} ({{ pendentes|length }}){% endif %}</button>
+        <button class="tablinks {% if aba == 'andamento' %}active{% endif %}" onclick="openTab(event, 'andamento')"> Andamento</button>
+        <button class="tablinks {% if aba == 'finalizado' %}active{% endif %}" onclick="openTab(event, 'finalizado')"> Finalizados</button>
 
 
           <input type="text" id="pesquisa-universal" class="input-pesquisa" placeholder="🔍︎ Pesquisar..." onkeyup="filtrarUniversal()">
@@ -33,8 +34,29 @@
 
    
 
+    {% if messages %}{% for message in messages %}<p style="color:#48b96d;">{{ message }}</p>{% endfor %}{% endif %}
+
+    <!-- ABA 0: Aguardando minha aprovação -->
+    <div id="pendentes" class="tabcontent" style="display:{% if aba == 'pendentes' %}block{% else %}none{% endif %};">
+        {% if pendentes %}
+        <table>
+            <tr><th>Nome</th><th>Modelo</th><th>Atualizado em</th><th>Ações</th></tr>
+            {% for instancia in pendentes %}
+            <tr>
+                <td>{{ instancia.nome }}</td>
+                <td>{{ instancia.modelo.nome }}</td>
+                <td>{{ instancia.atualizado_em|date:"d/m/Y H:i" }}</td>
+                <td><a class="a-detalhes" href="{% url 'detalhar_instancia_fluxo' instancia.id %}"> <img src="\static\img\checkcircle.png"> Analisar</a></td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% else %}
+            <p>Nenhum fluxo aguardando sua aprovação.</p>
+        {% endif %}
+    </div>
+
     <!-- ABA 1: Em andamento -->
-    <div id="andamento" class="tabcontent" style="display:block;">
+    <div id="andamento" class="tabcontent" style="display:{% if aba == 'andamento' %}block{% else %}none{% endif %};">
         {% if em_andamento %}
         
         <table>
@@ -56,7 +78,7 @@
 
                     <a class="a-detalhes" href="{% url 'detalhar_instancia_fluxo' instancia.id %}"> <img src="\static\img\eye.png">Detalhes </a>
 
-                    <a class="a-excluir" href="{% url 'excluir_instancias_fluxo' instancia.id %}"> <img src="\static\img\trash.png">Excluir </a>
+{% if request.user.is_admin_empresa %}<a class="a-excluir" href="{% url 'excluir_instancias_fluxo' instancia.id %}"> <img src="\static\img\trash.png">Excluir </a>{% endif %}
 
                 </td>
             </tr>
@@ -68,7 +90,7 @@
     </div>
 
     <!-- ABA 2: Finalizados -->
-    <div id="finalizado" class="tabcontent">
+    <div id="finalizado" class="tabcontent" style="display:{% if aba == 'finalizado' %}block{% else %}none{% endif %};">
         {% if finalizados %}
         <table>
             <tr>
@@ -88,7 +110,7 @@
 
                     <a class="a-detalhes" href="{% url 'detalhar_instancia_fluxo' instancia.id %}"> <img src="\static\img\eye.png"> Detalhes</a>
 
-                    <a class="a-excluir" href="{% url 'excluir_instancias_fluxo' instancia.id %}"> <img src="\static\img\trash.png"> Excluir</a>
+{% if request.user.is_admin_empresa %}<a class="a-excluir" href="{% url 'excluir_instancias_fluxo' instancia.id %}"> <img src="\static\img\trash.png"> Excluir</a>{% endif %}
                     
                 </td>
             </tr>
@@ -120,7 +142,7 @@
     // pega a aba ativa
     let ativa = document.querySelector(".tablinks.active").innerText.trim().toLowerCase();
 
-    let tabelaId = ativa === "andamento" ? "andamento" : "finalizado";
+    let tabelaId = ativa.startsWith("minhas") ? "pendentes" : (ativa === "andamento" ? "andamento" : "finalizado");
     let tabela = document.querySelector(`#${tabelaId} table`);
 
     if (!tabela) return;

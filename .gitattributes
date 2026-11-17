@@ -1,0 +1,4 @@
+# entrypoint precisa de quebra de linha LF mesmo clonado no Windows
+*.sh text eol=lf
+# scripts do Windows precisam de CRLF
+*.bat text eol=crlf

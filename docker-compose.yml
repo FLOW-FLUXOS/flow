@@ -1,0 +1,126 @@
+# FLOW — sobe tudo com:  docker compose up --build
+#
+#   http://localhost:8000          sistema web + API principal (via gateway)
+#   http://localhost:8000/api/v1/docs/          Swagger da API principal
+#   http://localhost:8000/api/pagamentos/docs/  Swagger da API de pagamentos
+#   http://localhost:8025          Mailpit: e-mails enviados (status de pagamento)
+#   http://localhost:15672         Painel do RabbitMQ (flow / flow)
+#
+x-broker: &broker
+  CELERY_BROKER_URL: amqp://flow:flow@rabbitmq:5672//
+  RABBITMQ_URL: amqp://flow:flow@rabbitmq:5672//
+
+services:
+  # ---------------- Infraestrutura ----------------
+  gateway:
+    image: nginx:1.27-alpine
+    volumes:
+      - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8000:80"
+    depends_on: [web, pagamentos]
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: flow
+      RABBITMQ_DEFAULT_PASS: flow
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025"
+
+  db:
+    image: postgres:16-alpine
+    environment: { POSTGRES_DB: flow, POSTGRES_USER: flow, POSTGRES_PASSWORD: flow }
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flow -d flow"]
+      interval: 5s
+      retries: 10
+
+  db_pagamentos:
+    image: postgres:16-alpine
+    environment: { POSTGRES_DB: pagamentos, POSTGRES_USER: flow, POSTGRES_PASSWORD: flow }
+    volumes: [pgdata_pagamentos:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flow -d pagamentos"]
+      interval: 5s
+      retries: 10
+
+  # ---------------- API principal (monolito) ----------------
+  web:
+    build: ./FLUXO_APROVACAO
+    env_file: .env
+    environment:
+      <<: *broker
+      RUN_MIGRATIONS: "1"
+      DATABASE_URL: postgres://flow:flow@db:5432/flow
+      PAGAMENTOS_URL: http://pagamentos:8001
+    depends_on:
+      db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  worker:  # notificações de fluxo (Celery)
+    build: ./FLUXO_APROVACAO
+    env_file: .env
+    environment:
+      <<: *broker
+      DATABASE_URL: postgres://flow:flow@db:5432/flow
+    command: celery -A FLUXO_APROVACAO worker -l info -Q default,fluxo.eventos,notificacoes.push
+    depends_on:
+      db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  assinaturas:  # escuta pagamento.pago / pagamento.reembolsado e atualiza o plano
+    build: ./FLUXO_APROVACAO
+    env_file: .env
+    environment:
+      <<: *broker
+      DATABASE_URL: postgres://flow:flow@db:5432/flow
+    command: python manage.py consumir_pagamentos
+    restart: on-failure
+    depends_on:
+      db: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  # ---------------- Microserviço de Pagamentos ----------------
+  pagamentos:
+    build: ./PAGAMENTOS
+    env_file: .env
+    environment:
+      <<: *broker
+      RUN_MIGRATIONS: "1"
+      PAGAMENTOS_DATABASE_URL: postgres://flow:flow@db_pagamentos:5432/pagamentos
+      PAGAMENTOS_PUBLIC_URL: ${PAGAMENTOS_PUBLIC_URL:-http://localhost:8000}
+      EMAIL_HOST: mailpit
+      EMAIL_PORT: "1025"
+    depends_on:
+      db_pagamentos: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+  pagamentos-email:  # escuta pagamento.* e envia um e-mail por status
+    build: ./PAGAMENTOS
+    env_file: .env
+    environment:
+      <<: *broker
+      PAGAMENTOS_DATABASE_URL: postgres://flow:flow@db_pagamentos:5432/pagamentos
+      EMAIL_HOST: mailpit
+      EMAIL_PORT: "1025"
+    command: python manage.py consumir_emails
+    restart: on-failure
+    depends_on:
+      db_pagamentos: { condition: service_healthy }
+      rabbitmq: { condition: service_healthy }
+
+volumes:
+  pgdata:
+  pgdata_pagamentos:

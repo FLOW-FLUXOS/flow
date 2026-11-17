@@ -74,9 +74,11 @@ Linguagem: Python
 
 Framework: Django
 
-Banco de dados: SQLite
+Banco de dados: PostgreSQL (SQLite em desenvolvimento)
 
-Arquitetura: MVT (Model-View-Template)
+Arquitetura: API REST (Django REST Framework + JWT) + backoffice MVT
+
+Mensageria: RabbitMQ + Celery
 
 Sistema de pagamento: AbacatePay
 
@@ -90,11 +92,21 @@ Interface intuitiva e simples
 
 🏗 Arquitetura e Tecnologias
 
-Backend: Python + Django
+Backend: Python + Django + Django REST Framework (API em /api/v1/, documentação Swagger em /api/v1/docs/)
 
-Frontend: Django Templates (HTML, CSS, JS)
+Mobile: Flutter consumindo a API (JWT)
 
-Banco de Dados: SQLite (ambiente inicial)
+Sistema web: Django Templates com todas as funções (colaboradores aprovam pelo web; gestão só para administradores)
+
+Banco de Dados: PostgreSQL
+
+Mensageria: RabbitMQ (broker) + Celery (notificações de fluxo) + eventos de pagamento com e-mail por status
+
+Microserviço de Pagamentos: API separada com banco próprio (pasta PAGAMENTOS), atrás de um gateway nginx
+
+Multi-empresa (SaaS): cada empresa só vê os próprios dados
+
+📘 Arquitetura, eventos e endpoints: [API.md](API.md)
 
 💼 Plano de Negócios
 🎯 Nicho de Mercado
@@ -217,6 +229,10 @@ CRUD de setores.
 Página para gerenciamento dos planos Freemium/Premium.
 
 🧷 Instalação e Execução
+
+Com Docker (recomendado): `cp .env.example .env && docker compose up --build`. Detalhes em [API.md](API.md).
+
+Sem Docker:
 # Clone o repositório
 git clone https://github.com/usuario/projeto-flow.git
 cd projeto-flow
@@ -230,6 +246,7 @@ venv\Scripts\activate      # Windows
 pip install -r requirements.txt
 
 # Rode as migrações
+cd FLUXO_APROVACAO
 python manage.py migrate
 
 # Execute o servidor

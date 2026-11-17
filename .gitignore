@@ -1,4 +1,14 @@
-/FLUXO_APROVACAO/SISTEMA/__pycache__
-/FLUXO_APROVACAO/FLUXO_APROVACAO/__pycache__
-/FLUXO_APROVACAO/SISTEMA/migrations/__pycache__
+__pycache__/
+*.pyc
+.env
 FLUXO_APROVACAO/.env
+FLUXO_APROVACAO/staticfiles/
+PAGAMENTOS/staticfiles/
+.venv/
+venv/
+
+# bancos locais (o Docker usa Postgres)
+*.sqlite3
+
+# arquivos salvos pelo app do Claude
+Claude outputs/

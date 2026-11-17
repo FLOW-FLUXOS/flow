@@ -1,8 +1,8 @@
 from django import forms
 from django.contrib.auth.forms import UserCreationForm
 from django.contrib.auth.models import Group
-from django.contrib.auth import get_user_model
-from .models import Usuario, Setor, FluxoPadrao
+
+from .models import FluxoPadrao, Setor, Usuario
 
 
 class LoginForm(forms.Form):
@@ -16,11 +16,22 @@ class LoginForm(forms.Form):
         widget=forms.PasswordInput(attrs={"placeholder": "Digite sua senha"})
     )
 
-class UsuarioCreateForm(UserCreationForm):
+
+class EmpresaFormMixin:
+    """Recebe a empresa do usuário logado e limita os selects aos dados dela."""
+
+    def __init__(self, *args, empresa=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.empresa = empresa
+        if "setor" in self.fields:
+            self.fields["setor"].queryset = Setor.objects.filter(empresa=empresa).order_by("nome")
+
+
+class UsuarioCreateForm(EmpresaFormMixin, UserCreationForm):
     email = forms.EmailField(required=True, label="E-mail")
-    setor = forms.ModelChoiceField(queryset=Setor.objects.all(), required=False, label="Setor")
+    setor = forms.ModelChoiceField(queryset=Setor.objects.none(), required=False, label="Setor")
     perfil = forms.ChoiceField(choices=Usuario._meta.get_field('perfil').choices, label="Perfil")
-    grupo = forms.ModelChoiceField(queryset=Group.objects.all(), required=True, label="Grupo")
+    grupo = forms.ModelChoiceField(queryset=Group.objects.all(), required=False, label="Grupo")
 
     class Meta:
         model = Usuario
@@ -28,27 +39,29 @@ class UsuarioCreateForm(UserCreationForm):
 
     def save(self, commit=True):
         user = super().save(commit=False)
+        user.empresa = self.empresa
         user.email = self.cleaned_data['email']
         user.setor = self.cleaned_data['setor']
         user.perfil = self.cleaned_data['perfil']
 
         if commit:
             user.save()
-            user.groups.add(self.cleaned_data['grupo'])
+            if self.cleaned_data.get('grupo'):
+                user.groups.add(self.cleaned_data['grupo'])
         return user
 
-Usuario = get_user_model()
 
-class UsuarioEditForm(forms.ModelForm):
+class UsuarioEditForm(EmpresaFormMixin, forms.ModelForm):
     class Meta:
         model = Usuario
-        fields = ['username', 'email', 'first_name', 'last_name', 'setor', 'perfil', 'groups']
+        fields = ['username', 'email', 'first_name', 'last_name', 'setor', 'perfil', 'is_active', 'groups']
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         for field in self.fields.values():
             field.required = False
         self.fields['groups'].label = 'Grupos'
+        self.fields['is_active'].label = 'Ativo'
 
     def clean_username(self):
         username = self.cleaned_data.get('username')
@@ -58,10 +71,24 @@ class UsuarioEditForm(forms.ModelForm):
             raise forms.ValidationError('Este nome de usuário já está em uso.')
         return username
 
-class SetorForm(forms.ModelForm):
+    def clean_perfil(self):
+        return self.cleaned_data.get('perfil') or self.instance.perfil
+
+
+class SetorForm(EmpresaFormMixin, forms.ModelForm):
     class Meta:
         model = Setor
         fields = ['nome', 'descricao']
+
+    def clean_nome(self):
+        nome = self.cleaned_data['nome']
+        qs = Setor.objects.filter(empresa=self.empresa, nome__iexact=nome)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise forms.ValidationError('Já existe um setor com este nome.')
+        return nome
+
 
 class FluxoPadraoForm(forms.ModelForm):
     class Meta:
@@ -72,6 +99,11 @@ class FluxoPadraoForm(forms.ModelForm):
             'descricao': forms.Textarea(attrs={'class': 'form-control', 'rows': 3}),
         }
 
+
 class InstanciaFluxoForm(forms.Form):
-    fluxo_padrao = forms.ModelChoiceField(queryset=FluxoPadrao.objects.all(), widget=forms.Select(attrs={'class': 'form-control'}))
+    fluxo_padrao = forms.ModelChoiceField(queryset=FluxoPadrao.objects.none(), widget=forms.Select(attrs={'class': 'form-control'}))
     nome_instancia = forms.CharField(max_length=200, widget=forms.TextInput(attrs={'class': 'form-control'}))
+
+    def __init__(self, *args, empresa=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["fluxo_padrao"].queryset = FluxoPadrao.objects.filter(empresa=empresa).order_by("nome")
