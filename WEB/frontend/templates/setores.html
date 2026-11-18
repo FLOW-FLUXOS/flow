@@ -1,0 +1,79 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Setores{% endblock %}
+{% block somente_admin %}true{% endblock %}
+{% block conteudo %}
+<div x-data="telaSetores()" x-init="carregar()">
+    <div class="top-bar">
+        <h1><img class="main-img" src="{% static 'img/department.png' %}"> Setores</h1>
+        <input type="text" class="input-pesquisa" placeholder="🔍︎ Pesquisar..." x-model="busca">
+        <a class="right-top-button" href="#" @click.prevent="novo()"><img style="width:17px;height:17px;padding-right:10px;" src="{% static 'img/add.png' %}"> Adicionar</a>
+    </div>
+    <hr>
+
+    <template x-if="form">
+        <form class="etapa-card" style="max-width:520px;" @submit.prevent="salvar()">
+            <h3 style="margin-top:0;" x-text="form.id ? 'Editar setor' : 'Novo setor'"></h3>
+            <div class="campo"><label>Nome *</label><input x-model="form.nome" required></div>
+            <div class="campo"><label>Descrição</label><input x-model="form.descricao"></div>
+            <p class="erro-campo" x-show="erro" x-text="erro"></p>
+            <button class="botao" type="submit">Salvar</button>
+            <button class="botao secundario" type="button" @click="form = null">Cancelar</button>
+        </form>
+    </template>
+
+    <p class="carregando" x-show="carregando">Carregando...</p>
+    <table x-show="!carregando" x-cloak>
+        <tr><th>Nome</th><th>Descrição</th><th>Criado em</th><th>Ações</th></tr>
+        <template x-for="s in filtrados" :key="s.id">
+            <tr>
+                <td x-text="s.nome"></td>
+                <td x-text="s.descricao || '—'"></td>
+                <td x-text="FLOW.fmt.dataHora(s.criado_em)"></td>
+                <td>
+                    <a class="a-detalhes" @click="editar(s)"><img src="{% static 'img/pen.png' %}"> Editar</a>
+                    <a class="a-excluir" @click="excluir(s)"><img src="{% static 'img/trash.png' %}"> Excluir</a>
+                </td>
+            </tr>
+        </template>
+        <tr x-show="filtrados.length === 0"><td colspan="4" class="vazio">Nenhum setor cadastrado.</td></tr>
+    </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaSetores() {
+    return {
+        setores: [], busca: "", carregando: true, form: null, erro: "",
+        get filtrados() {
+            const b = this.busca.toLowerCase();
+            return this.setores.filter((s) => !b || (s.nome + " " + (s.descricao || "")).toLowerCase().includes(b));
+        },
+        async carregar() {
+            try { this.setores = await FLOW.listar("/setores/"); }
+            catch (e) { avisarNaTela(e.message, "erro"); }
+            finally { this.carregando = false; }
+        },
+        novo() { this.erro = ""; this.form = { id: null, nome: "", descricao: "" }; },
+        editar(s) { this.erro = ""; this.form = { id: s.id, nome: s.nome, descricao: s.descricao || "" }; },
+        async salvar() {
+            this.erro = "";
+            const { id, nome, descricao } = this.form;
+            try {
+                await FLOW.v1(id ? `/setores/${id}/` : "/setores/", { method: id ? "PATCH" : "POST", body: { nome, descricao } });
+                avisarNaTela(id ? "Setor atualizado." : `Setor "${nome}" criado.`);
+                this.form = null;
+                this.carregar();
+            } catch (e) { this.erro = e.message; }
+        },
+        async excluir(s) {
+            if (!confirm(`Excluir o setor "${s.nome}"? Usuários e etapas desse setor ficarão sem setor.`)) return;
+            try {
+                await FLOW.v1(`/setores/${s.id}/`, { method: "DELETE" });
+                avisarNaTela(`Setor "${s.nome}" excluído.`);
+                this.carregar();
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,78 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}{% if id %}Editar usuário{% else %}Novo usuário{% endif %}{% endblock %}
+{% block somente_admin %}true{% endblock %}
+{% block conteudo %}
+<div x-data="telaUsuario({{ id|default:'null' }})" x-init="carregar()">
+    <h1><a href="{% url 'usuarios' %}"><img style="width:30px;height:30px;padding-right:3px;" src="{% static 'img/back.png' %}"></a>
+        <span x-text="id ? 'Editar usuário' : 'Novo usuário'"></span></h1>
+    <hr>
+    <p class="carregando" x-show="carregando">Carregando...</p>
+    <form @submit.prevent="salvar()" x-show="!carregando" x-cloak>
+        <div class="linha-campos">
+            <div class="campo"><label>Usuário (para entrar) *</label><input x-model="u.username" required></div>
+            <div class="campo"><label>E-mail</label><input type="email" x-model="u.email"></div>
+        </div>
+        <div class="linha-campos">
+            <div class="campo"><label>Nome</label><input x-model="u.first_name"></div>
+            <div class="campo"><label>Sobrenome</label><input x-model="u.last_name"></div>
+        </div>
+        <div class="linha-campos">
+            <div class="campo">
+                <label>Setor</label>
+                <select x-model="u.setor">
+                    <option value="">Sem setor</option>
+                    <template x-for="s in setores" :key="s.id"><option :value="s.id" x-text="s.nome" :selected="s.id == u.setor"></option></template>
+                </select>
+                <small>Define quais etapas a pessoa aprova.</small>
+            </div>
+            <div class="campo">
+                <label>Perfil</label>
+                <select x-model="u.perfil">
+                    <option value="padrao">Colaborador</option>
+                    <option value="administrador">Administrador</option>
+                </select>
+                <small>Administrador acessa o backoffice e aprova qualquer etapa.</small>
+            </div>
+        </div>
+        <div class="campo">
+            <label x-text="id ? 'Nova senha' : 'Senha *'"></label>
+            <input type="password" x-model="u.password" :required="!id" autocomplete="new-password">
+            <small x-text="id ? 'Deixe em branco para manter a senha atual.' : 'Mínimo de 8 caracteres, não pode ser só números.'"></small>
+        </div>
+        <div class="campo" x-show="id"><label><input type="checkbox" x-model="u.is_active" style="width:auto;"> Ativo (pode entrar no sistema)</label></div>
+        <p class="erro-campo" x-show="erro" x-text="erro"></p>
+        <button class="blue-button" type="submit" :disabled="enviando" x-text="id ? 'Salvar' : 'Criar usuário'"></button>
+    </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaUsuario(id) {
+    return {
+        id, u: { username: "", email: "", first_name: "", last_name: "", setor: "", perfil: "padrao", password: "", is_active: true },
+        setores: [], erro: "", carregando: true, enviando: false,
+        async carregar() {
+            try {
+                this.setores = await FLOW.listar("/setores/");
+                if (id) {
+                    const u = await FLOW.v1(`/usuarios/${id}/`);
+                    this.u = { ...u, setor: u.setor || "", password: "" };
+                }
+            } catch (e) { this.erro = e.message; }
+            finally { this.carregando = false; }
+        },
+        async salvar() {
+            this.erro = ""; this.enviando = true;
+            const body = { ...this.u, setor: this.u.setor ? Number(this.u.setor) : null };
+            delete body.id; delete body.setor_detalhe; delete body.criado_em;
+            if (!body.password) delete body.password;
+            try {
+                await FLOW.v1(id ? `/usuarios/${id}/` : "/usuarios/", { method: id ? "PATCH" : "POST", body });
+                FLOW.avisar(id ? `Usuário "${body.username}" atualizado.` : `Usuário "${body.username}" criado.`);
+                location.href = "/usuarios/";
+            } catch (e) { this.erro = e.message; } finally { this.enviando = false; }
+        },
+    };
+}
+</script>
+{% endblock %}

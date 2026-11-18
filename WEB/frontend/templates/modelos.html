@@ -1,0 +1,57 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Modelos de fluxo{% endblock %}
+{% block somente_admin %}true{% endblock %}
+{% block conteudo %}
+<div x-data="telaModelos()" x-init="carregar()">
+    <div class="top-bar">
+        <h1><img class="main-img" src="{% static 'img/flou.png' %}"> Modelos de Fluxo</h1>
+        <input type="text" class="input-pesquisa" placeholder="🔍︎ Pesquisar..." x-model="busca">
+        <a class="right-top-button" href="{% url 'modelo_novo' %}"><img style="width:17px;height:17px;padding-right:10px;" src="{% static 'img/add.png' %}"> Adicionar</a>
+    </div>
+    <hr>
+    <p class="carregando" x-show="carregando">Carregando...</p>
+    <p class="vazio" x-show="!carregando && modelos.length === 0" x-cloak>Nenhum modelo de fluxo cadastrado ainda.</p>
+    <table x-show="!carregando && modelos.length > 0" x-cloak>
+        <tr><th>Nome</th><th>Etapas</th><th>Fluxos criados</th><th>Criado por</th><th>Ações</th></tr>
+        <template x-for="m in filtrados" :key="m.id">
+            <tr>
+                <td><strong x-text="m.nome"></strong><br><small class="muted" x-text="m.descricao || ''"></small></td>
+                <td x-text="m.etapas.map((e) => e.nome).join(' → ')"></td>
+                <td x-text="m.total_instancias"></td>
+                <td x-text="m.criado_por || '—'"></td>
+                <td>
+                    <a class="a-detalhes" :href="'/fluxos/modelos/' + m.id + '/editar/'"><img src="{% static 'img/pen.png' %}"> Editar</a>
+                    <a class="a-excluir" @click="excluir(m)"><img src="{% static 'img/trash.png' %}"> Excluir</a>
+                </td>
+            </tr>
+        </template>
+    </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaModelos() {
+    return {
+        modelos: [], busca: "", carregando: true,
+        get filtrados() {
+            const b = this.busca.toLowerCase();
+            return this.modelos.filter((m) => !b || (m.nome + " " + (m.descricao || "")).toLowerCase().includes(b));
+        },
+        async carregar() {
+            try { this.modelos = await FLOW.listar("/modelos/"); }
+            catch (e) { avisarNaTela(e.message, "erro"); }
+            finally { this.carregando = false; }
+        },
+        async excluir(m) {
+            const aviso = m.total_instancias ? `\n\nAtenção: os ${m.total_instancias} fluxo(s) criados com ele também serão apagados.` : "";
+            if (!confirm(`Excluir o modelo "${m.nome}"?${aviso}`)) return;
+            try {
+                await FLOW.v1(`/modelos/${m.id}/`, { method: "DELETE" });
+                avisarNaTela(`Modelo "${m.nome}" excluído.`);
+                this.carregar();
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+    };
+}
+</script>
+{% endblock %}

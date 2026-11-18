@@ -1,0 +1,80 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Fluxos{% endblock %}
+{% block conteudo %}
+<div x-data="telaFluxos()" x-init="carregar()">
+    <h1><img class="main-img" src="{% static 'img/flow.png' %}"> Fluxos</h1>
+
+    <div class="tab">
+        <button class="tablinks" :class="aba === 'pendentes' && 'active'" @click="trocar('pendentes')">Minhas aprovações (<span x-text="listas.pendentes.length"></span>)</button>
+        <button class="tablinks" :class="aba === 'andamento' && 'active'" @click="trocar('andamento')">Andamento</button>
+        <button class="tablinks" :class="aba === 'finalizado' && 'active'" @click="trocar('finalizado')">Finalizados</button>
+        <input type="text" class="input-pesquisa" placeholder="🔍︎ Pesquisar..." x-model="busca">
+        <a class="right-top-button" href="{% url 'fluxo_novo' %}"><img style="width:17px;height:17px;padding-right:10px;" src="{% static 'img/add.png' %}"> Adicionar</a>
+    </div>
+
+    <p class="carregando" x-show="carregando">Carregando...</p>
+    <div class="conteudo-aba" x-show="!carregando" x-cloak>
+        <p class="vazio" x-show="filtrados.length === 0" x-text="vazio[aba]"></p>
+        <table x-show="filtrados.length > 0">
+            <tr>
+                <th>Nome</th><th>Modelo</th><th>Etapa atual</th><th>Progresso</th><th>Criado por</th>
+                <th x-text="aba === 'finalizado' ? 'Finalizado em' : 'Atualizado em'"></th><th>Ações</th>
+            </tr>
+            <template x-for="f in filtrados" :key="f.id">
+                <tr>
+                    <td x-text="f.nome"></td>
+                    <td x-text="f.modelo"></td>
+                    <td x-text="f.etapa_atual ? f.etapa_atual.nome : 'Finalizado'"></td>
+                    <td x-text="f.progresso.concluidas + '/' + f.progresso.total"></td>
+                    <td x-text="f.criado_por ? f.criado_por.nome : '—'"></td>
+                    <td x-text="FLOW.fmt.dataHora(f.atualizado_em)"></td>
+                    <td>
+                        <a class="a-detalhes" :href="'/fluxos/instancias/' + f.id + '/'">
+                            <img :src="aba === 'pendentes' ? '{% static 'img/checkcircle.png' %}' : '{% static 'img/eye.png' %}'">
+                            <span x-text="aba === 'pendentes' ? 'Analisar' : 'Detalhes'"></span>
+                        </a>
+                        <a class="a-excluir" x-show="usuario.is_admin" @click="excluir(f)"><img src="{% static 'img/trash.png' %}"> Excluir</a>
+                    </td>
+                </tr>
+            </template>
+        </table>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaFluxos() {
+    return {
+        aba: new URLSearchParams(location.search).get("aba") || "pendentes",
+        listas: { pendentes: [], andamento: [], finalizado: [] },
+        busca: "", carregando: true,
+        vazio: { pendentes: "Nenhum fluxo aguardando sua aprovação.", andamento: "Nenhum fluxo em andamento.", finalizado: "Nenhum fluxo finalizado." },
+        get filtrados() {
+            const b = this.busca.toLowerCase();
+            return this.listas[this.aba].filter((f) => !b || (f.nome + " " + f.modelo).toLowerCase().includes(b));
+        },
+        trocar(aba) { this.aba = aba; history.replaceState(null, "", "?aba=" + aba); },
+        async carregar() {
+            this.carregando = true;
+            try {
+                const [p, a, f] = await Promise.all([
+                    FLOW.listar("/fluxos/pendentes/"),
+                    FLOW.listar("/fluxos/?status=em_andamento"),
+                    FLOW.listar("/fluxos/?status=finalizado"),
+                ]);
+                this.listas = { pendentes: p, andamento: a, finalizado: f };
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+            finally { this.carregando = false; }
+        },
+        async excluir(f) {
+            if (!confirm(`Excluir o fluxo "${f.nome}"? O histórico dele também será apagado.`)) return;
+            try {
+                await FLOW.v1(`/fluxos/${f.id}/`, { method: "DELETE" });
+                avisarNaTela(`Fluxo "${f.nome}" excluído.`);
+                this.carregar();
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+    };
+}
+</script>
+{% endblock %}

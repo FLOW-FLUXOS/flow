@@ -1,19 +1,23 @@
 # FLOW — Arquitetura e APIs
 
-## Visão geral
+## Visão geral: desenvolvimento baseado em API
+
+Nenhuma tela acessa banco de dados. **Web, app Flutter e Swagger são clientes** das mesmas APIs.
 
 ```
-                         ┌──────────────── Gateway (nginx) :8000 ────────────────┐
- App Flutter / Web ────▶ │  /api/pagamentos/*  ──▶  API de Pagamentos (:8001)    │
-                         │  todo o resto       ──▶  API principal + Web (:8000)  │
-                         └───────────────────────────────────────────────────────┘
+                      ┌──────────────────── Gateway (nginx) :8000 ────────────────────┐
+ Navegador (web) ───▶ │  /                  ──▶  WEB (front: só HTML/CSS/JS, SEM banco) │
+ App Flutter     ───▶ │  /api/v1/           ──▶  API principal                          │
+ Swagger         ───▶ │  /api/pagamentos/   ──▶  API de Pagamentos (microserviço)       │
+                      └─────────────────────────────────────────────────────────────────┘
+ O navegador baixa as telas do WEB e busca os dados chamando /api/v1 e /api/pagamentos
+ com o token JWT, exatamente como o app Flutter.
 
- API principal (monolito)                         API de Pagamentos (microserviço)
+ API principal                                    API de Pagamentos (microserviço)
  ├ fluxos, usuários, setores, modelos             ├ cobranças, status, histórico
- ├ sistema web (todas as funções)                 ├ AbacatePay ou simulador
- ├ banco: Postgres "flow"                         ├ banco: Postgres "pagamentos"
- └ worker Celery: notificações de fluxo           └ publica eventos no RabbitMQ
-                    ▲                                         │
+ ├ banco: Postgres "flow"                         ├ AbacatePay ou simulador
+ └ worker Celery: notificações de fluxo           ├ banco: Postgres "pagamentos"
+                    ▲                             └ publica eventos no RabbitMQ
                     │      RabbitMQ — exchange "pagamentos"   │
                     │      (topic, routing pagamento.<status>)▼
    consumidor "assinaturas"  ◀── pagamento.pago / reembolsado ┤
@@ -22,6 +26,7 @@
                                                   (1 e-mail por status → Mailpit)
 ```
 
+- **Front separado (pasta `WEB`).** É um projeto Django sem banco e sem models: só entrega as telas. Cada tela usa JavaScript (Alpine.js + `static/js/api.js`) para chamar a API. Pra ver isso ao vivo: F12 → aba **Rede (Network)** → cada clique aparece como chamada a `/api/v1/...`.
 - **Dois serviços, dois bancos.** O monolito não acessa o banco de pagamentos, e o contrário também não acontece. Eles se falam só por **HTTP com JWT** e por **eventos no RabbitMQ**.
 - **JWT compartilhado.** A API principal emite o token com `empresa_id`, `perfil`, `email` e `empresa_nome`. A API de Pagamentos confere a assinatura com a mesma `JWT_SIGNING_KEY` e lê esses dados direto do token, sem precisar de tabela de usuários.
 - **Mensageria.** Tem duas trocas de mensagens no sistema:
@@ -45,13 +50,13 @@ Transições permitidas: `pendente → pago | expirado | cancelado` e `pago → 
 ```
 copy .env.example .env           (Linux/Mac: cp .env.example .env)
 docker compose up --build
-docker compose exec web python manage.py popular_demo
-docker compose exec web python manage.py createsuperuser
+docker compose exec api python manage.py popular_demo
+docker compose exec api python manage.py createsuperuser
 ```
 
 | Endereço | O que é |
 |---|---|
-| http://localhost:8000 | Sistema web |
+| http://localhost:8000 | Sistema web (front) |
 | http://localhost:8000/api/v1/docs/ | Swagger da API principal |
 | http://localhost:8000/api/pagamentos/docs/ | Swagger da API de Pagamentos |
 | http://localhost:8025 | **Mailpit**: os e-mails de pagamento aparecem aqui |
@@ -63,7 +68,8 @@ Usuários do `popular_demo` (senha `Flow@2026`): `demo.admin`, `demo.engenharia`
 | Container | Função |
 |---|---|
 | `gateway` | nginx, ponto de entrada único |
-| `web` | API principal + sistema web |
+| `frontend` | Telas do sistema web (sem banco) |
+| `api` | API principal |
 | `worker` | Celery: notificações de fluxo |
 | `assinaturas` | Consome `pagamento.pago` e `pagamento.reembolsado` |
 | `pagamentos` | API de Pagamentos |
@@ -79,7 +85,9 @@ Usuários do `popular_demo` (senha `Flow@2026`): `demo.admin`, `demo.engenharia`
 
 Com `ABACATEPAY_API_KEY` no `.env`, o simulador é desligado e o link vira um PIX de verdade. O webhook do AbacatePay vai em `/api/pagamentos/webhook/abacatepay/?secret=<WEBHOOK_SECRET>`.
 
-## Sistema web: quem vê o quê
+## Sistema web (front): quem vê o quê
+
+Todas as telas abaixo buscam e gravam dados pela API. O front só esconde do menu o que o perfil não usa; quem garante a permissão é a API (403).
 
 | Função | Colaborador | Admin |
 |---|---|---|
@@ -88,7 +96,10 @@ Com `ABACATEPAY_API_KEY` no `.env`, o simulador é desligado e o link vira um PI
 | Notificações (sininho) | ✔ | ✔ |
 | Excluir fluxo | | ✔ |
 | Usuários, setores, modelos de fluxo | | ✔ |
-| Planos e pagamentos | | ✔ |
+| Planos e pagamentos (API de pagamentos) | | ✔ |
+| Dados da empresa | | ✔ |
+| Meu perfil e trocar senha | ✔ | ✔ |
+| Criar conta da empresa (tela de registro) | qualquer visitante | |
 
 ## API principal: `/api/v1/`
 
@@ -134,11 +145,14 @@ Login: `POST auth/login/` com `{"username", "password"}`, que devolve `access`, 
 pip install -r requirements.txt
 cd FLUXO_APROVACAO && python manage.py migrate && python manage.py runserver 8000
 cd PAGAMENTOS && python manage.py migrate && python manage.py runserver 8001
+cd WEB && set FLOW_API_URL=http://127.0.0.1:8000&& set FLOW_PAGAMENTOS_URL=http://127.0.0.1:8001&& python manage.py runserver 8002
 ```
 
-Sem RabbitMQ configurado, os eventos de fluxo rodam na hora e os de pagamento vão para um broker em memória (os e-mails não saem). Para ver a mensageria funcionando, use o Docker.
+Abra http://127.0.0.1:8002. Sem gateway, o front chama as APIs em outros endereços (CORS liberado em modo DEBUG). Sem RabbitMQ, os eventos de fluxo rodam na hora e os de pagamento vão para um broker em memória (os e-mails não saem). Para ver a mensageria funcionando, use o Docker.
 
-Testes: `python manage.py test api` (FLUXO_APROVACAO, 27 testes) e `python manage.py test cobrancas` (PAGAMENTOS, 13 testes).
+Testes: `python manage.py test api` (FLUXO_APROVACAO, 22 testes) e `python manage.py test cobrancas` (PAGAMENTOS, 13 testes).
+
+Listas das APIs vêm paginadas (`{count, next, previous, results}`, 20 por página); peça até 100 com `?page_size=100`.
 
 ## Flutter
 

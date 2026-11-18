@@ -1,2 +1,3 @@
 -r FLUXO_APROVACAO/requirements.txt
 -r PAGAMENTOS/requirements.txt
+-r WEB/requirements.txt

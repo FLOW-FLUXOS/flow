@@ -1,6 +1,9 @@
-# FLOW — sobe tudo com:  docker compose up --build
+# FLOW — sobe tudo com:  docker compose up --build   (ou dois cliques no subir.bat)
 #
-#   http://localhost:8000          sistema web + API principal (via gateway)
+#   Arquitetura baseada em API: o front (web) não tem banco; o navegador e o app
+#   Flutter consomem as mesmas APIs pelo gateway.
+#
+#   http://localhost:8000          sistema web (front) — via gateway
 #   http://localhost:8000/api/v1/docs/          Swagger da API principal
 #   http://localhost:8000/api/pagamentos/docs/  Swagger da API de pagamentos
 #   http://localhost:8025          Mailpit: e-mails enviados (status de pagamento)
@@ -18,7 +21,7 @@ services:
       - ./gateway/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     ports:
       - "8000:80"
-    depends_on: [web, pagamentos]
+    depends_on: [frontend, api, pagamentos]
 
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
@@ -56,15 +59,19 @@ services:
       interval: 5s
       retries: 10
 
+  # ---------------- Front-end (só telas, sem banco) ----------------
+  frontend:
+    build: ./WEB
+    env_file: .env
+
   # ---------------- API principal (monolito) ----------------
-  web:
+  api:
     build: ./FLUXO_APROVACAO
     env_file: .env
     environment:
       <<: *broker
       RUN_MIGRATIONS: "1"
       DATABASE_URL: postgres://flow:flow@db:5432/flow
-      PAGAMENTOS_URL: http://pagamentos:8001
     depends_on:
       db: { condition: service_healthy }
       rabbitmq: { condition: service_healthy }

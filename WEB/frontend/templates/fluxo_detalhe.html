@@ -1,0 +1,115 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Fluxo{% endblock %}
+{% block conteudo %}
+<div x-data="telaDetalhe({{ id }})" x-init="carregar()">
+    <a href="{% url 'fluxos' %}" class="btn-voltar"><img style="width:30px;height:30px;padding-right:3px;" src="{% static 'img/back.png' %}"> Voltar</a>
+
+    <p class="carregando" x-show="!f">Carregando...</p>
+    <template x-if="f">
+        <div>
+            <div class="card">
+                <h1 x-text="f.nome"></h1>
+                <div class="meta">
+                    Modelo: <strong x-text="f.modelo"></strong> |
+                    Status: <strong x-text="f.finalizado ? 'Finalizado' : 'Em andamento'"></strong> |
+                    Criado por <span x-text="f.criado_por ? f.criado_por.nome : '—'"></span> em <span x-text="FLOW.fmt.dataHora(f.criado_em)"></span>
+                </div>
+
+                <p style="color:#f9d54a; margin:6px 0 0;" x-show="f.pode_aprovar">
+                    <strong>Esta etapa aguarda a sua aprovação.</strong> Clique na etapa atual para aprovar ou retornar.
+                </p>
+                <p style="color:#9fb3c8; margin:6px 0 0;" x-show="!f.pode_aprovar && f.etapa_atual">
+                    Aguardando aprovação de: <strong x-text="quemAprova"></strong>
+                </p>
+                <p style="color:#48b96d; margin:6px 0 0;" x-show="f.finalizado"><strong>Todas as etapas foram aprovadas.</strong></p>
+
+                <div style="position:relative;">
+                    <div class="line" aria-hidden="true"></div>
+                    <div class="timeline">
+                        <template x-for="e in f.etapas" :key="e.id">
+                            <div class="stage" @click="abrir(e)" :style="podeClicar(e) ? 'cursor:pointer' : ''" :title="podeClicar(e) ? 'Clique para aprovar ou retornar' : ''">
+                                <span class="dot" :class="{ done: e.status === 'concluida', current: e.status === 'atual', pending: e.status === 'pendente' }"></span>
+                                <span class="label" x-text="e.nome"></span>
+                                <span class="sub" x-text="'Setor: ' + (e.setor_detalhe ? e.setor_detalhe.nome : '—')"></span>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h3>Histórico</h3>
+                <div class="history">
+                    <template x-for="m in f.movimentacoes" :key="m.id">
+                        <div class="mov">
+                            <div><strong x-text="m.acao || '—'"></strong> — <span x-text="m.etapa || '—'"></span></div>
+                            <div><small x-text="(m.usuario ? m.usuario.nome : 'Sistema') + ' • ' + FLOW.fmt.dataHora(m.data_acao)"></small></div>
+                            <div style="margin-top:6px;" x-show="m.comentario" x-text="m.comentario"></div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </template>
+
+    <div class="modal" :style="modal ? 'display:flex' : 'display:none'" @click.self="modal = false" role="dialog">
+        <div class="box">
+            <span class="close" @click="modal = false">×</span>
+            <h3 x-text="f && f.etapa_atual ? f.etapa_atual.nome : ''"></h3>
+            <p><small x-text="f && f.etapa_atual ? 'Setor: ' + (f.etapa_atual.setor || '—') : ''"></small></p>
+            <label>Comentário (opcional)</label>
+            <textarea x-model="comentario"></textarea>
+            <p class="erro-campo" x-show="erro" x-text="erro"></p>
+            <div class="actions">
+                <button type="button" class="btn-return" :disabled="enviando || !f || !f.pode_retornar" :style="f && !f.pode_retornar ? 'opacity:.6' : ''" @click="mover('retornar')">Retornar</button>
+                <button type="button" class="btn-advance" :disabled="enviando" @click="mover('avancar')">Avançar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaDetalhe(id) {
+    return {
+        f: null, modal: false, comentario: "", erro: "", enviando: false,
+        get quemAprova() {
+            const e = this.f.etapas.find((x) => x.status === "atual");
+            if (!e) return "";
+            const setor = e.setor_detalhe ? e.setor_detalhe.nome : "qualquer usuário";
+            return setor + (e.perfil_aprovador === "administrador" ? " (administrador)" : "");
+        },
+        podeClicar(e) { return e.status === "atual" && this.f.pode_aprovar; },
+        async carregar() {
+            try { this.f = await FLOW.v1(`/fluxos/${id}/`); }
+            catch (e) {
+                if (e.status === 404) { FLOW.avisar("Fluxo não encontrado.", "erro"); location.href = "/fluxos/instancias/"; }
+                else avisarNaTela(e.message, "erro");
+            }
+        },
+        abrir(e) {
+            if (!this.podeClicar(e)) return;
+            this.comentario = ""; this.erro = ""; this.modal = true;
+        },
+        async mover(acao) {
+            this.erro = ""; this.enviando = true;
+            try {
+                const etapaAntes = this.f.etapa_atual.nome;
+                this.f = await FLOW.v1(`/fluxos/${id}/${acao}/`, {
+                    method: "POST",
+                    body: { comentario: this.comentario, etapa_id: this.f.etapa_atual.id },
+                });
+                this.modal = false;
+                if (this.f.finalizado) avisarNaTela(`"${etapaAntes}" aprovada. O fluxo foi finalizado!`);
+                else if (acao === "avancar") avisarNaTela(`"${etapaAntes}" aprovada. Agora está em "${this.f.etapa_atual.nome}".`);
+                else avisarNaTela(`Fluxo devolvido para "${this.f.etapa_atual.nome}".`);
+                window.dispatchEvent(new Event("flow:notificacoes"));
+            } catch (e) {
+                this.erro = e.message;
+                if (e.status === 400 || e.status === 403) this.carregar();  // alguém pode ter mexido antes
+            } finally { this.enviando = false; }
+        },
+    };
+}
+</script>
+{% endblock %}

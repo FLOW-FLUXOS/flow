@@ -96,7 +96,7 @@ Backend: Python + Django + Django REST Framework (API em /api/v1/, documentaçã
 
 Mobile: Flutter consumindo a API (JWT)
 
-Sistema web: Django Templates com todas as funções (colaboradores aprovam pelo web; gestão só para administradores)
+Sistema web: front separado (pasta WEB), Django sem banco + Alpine.js, consumindo a API como o app (desenvolvimento baseado em API)
 
 Banco de Dados: PostgreSQL
 

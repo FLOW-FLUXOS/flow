@@ -1,0 +1,112 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Planos{% endblock %}
+{% block somente_admin %}true{% endblock %}
+{% block conteudo %}
+<div x-data="telaPlanos()" x-init="carregar()">
+    <h1><img class="main-img" src="{% static 'img/crown.png' %}"> Planos e pagamentos</h1>
+    <hr>
+
+    <div class="status-card" x-show="assinatura" x-cloak>
+        <div style="font-size:20px; font-weight:600;">Plano atual: <span x-text="nomePlano(assinatura && assinatura.plano_atual)"></span></div>
+        <div style="margin-top:6px;">
+            Usuários: <strong x-text="assinatura && assinatura.total_usuarios"></strong> de
+            <strong x-text="assinatura && (assinatura.limite_usuarios || 'ilimitados')"></strong>
+            <template x-if="assinatura && assinatura.assinatura && assinatura.assinatura.dias_restantes !== null">
+                <span> &nbsp;|&nbsp; Válido até <strong x-text="FLOW.fmt.data(assinatura.assinatura.data_fim + 'T12:00:00')"></strong>
+                (<span x-text="assinatura.assinatura.dias_restantes"></span> dias)</span>
+            </template>
+        </div>
+    </div>
+
+    <div class="planos">
+        <template x-for="p in planos" :key="p.plano">
+            <div class="plano" :class="assinatura && assinatura.plano_atual === p.plano && 'atual'">
+                <h3 x-text="p.nome"></h3>
+                <p x-text="limites[p.plano]"></p>
+                <h2 style="color:#4da3ff;" x-text="FLOW.fmt.dinheiro(p.valor) + ' / mês'"></h2>
+                <button class="botao" style="width:100%;" @click="assinar(p)" :disabled="enviando"
+                        x-text="assinatura && assinatura.plano_atual === p.plano ? 'Renovar' : 'Assinar ' + p.nome.replace('Plano ', '')"></button>
+            </div>
+        </template>
+        <div class="plano">
+            <h3>Diamante</h3>
+            <p>Usuários ilimitados e suporte exclusivo.</p>
+            <h2>Sob consulta</h2>
+            <a class="botao secundario" style="display:block;" href="https://wa.me/5519999999999?text=Quero%20saber%20sobre%20o%20Plano%20Diamante" target="_blank">Fale com a gente</a>
+        </div>
+    </div>
+    <p class="erro-campo" x-show="erroPagamentos" x-text="erroPagamentos" x-cloak></p>
+
+    <h3>Histórico de pagamentos <small class="muted">(API de pagamentos)</small></h3>
+    <p class="vazio" x-show="cobrancas.length === 0">Nenhum pagamento ainda.</p>
+    <table x-show="cobrancas.length > 0" x-cloak>
+        <tr><th>Data</th><th>Plano</th><th>Valor</th><th>Status</th><th>Ações</th></tr>
+        <template x-for="c in cobrancas" :key="c.id">
+            <tr>
+                <td x-text="FLOW.fmt.dataHora(c.criado_em)"></td>
+                <td x-text="nomePlano(c.plano)"></td>
+                <td x-text="c.valor_formatado"></td>
+                <td><span class="tag" :class="c.status" x-text="FLOW.fmt.statusCobranca[c.status] || c.status"></span></td>
+                <td>
+                    <a class="a-detalhes" :href="c.checkout_url" target="_blank" x-show="c.status === 'pendente'">Pagar</a>
+                    <a class="a-detalhes" :href="c.checkout_url" target="_blank" x-show="c.status === 'pago' && c.gateway === 'simulador'">Abrir simulador</a>
+                </td>
+            </tr>
+        </template>
+    </table>
+
+    <h3 style="margin-top:40px;">Dados da empresa</h3>
+    <p class="muted">Usados na cobrança (o gateway de pagamento pede CNPJ e telefone).</p>
+    <template x-if="empresa">
+        <form @submit.prevent="salvarEmpresa()">
+            <div class="linha-campos">
+                <div class="campo"><label>Nome</label><input x-model="empresa.nome"></div>
+                <div class="campo"><label>CNPJ</label><input x-model="empresa.cnpj"></div>
+            </div>
+            <div class="linha-campos">
+                <div class="campo"><label>E-mail</label><input type="email" x-model="empresa.email"></div>
+                <div class="campo"><label>Telefone</label><input x-model="empresa.telefone"></div>
+            </div>
+            <button class="botao" type="submit">Salvar dados da empresa</button>
+        </form>
+    </template>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaPlanos() {
+    return {
+        assinatura: null, planos: [], cobrancas: [], empresa: null, enviando: false, erroPagamentos: "",
+        limites: { prata: "Até 5 usuários.", ouro: "Até 10 usuários." },
+        nomePlano(p) { return { freemium: "Freemium", prata: "Prata", ouro: "Ouro", diamante: "Diamante" }[p] || p; },
+        async carregar() {
+            // API principal: plano atual e empresa
+            try {
+                [this.assinatura, this.empresa] = await Promise.all([FLOW.v1("/assinatura/"), FLOW.v1("/empresa/")]);
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+            // API de pagamentos: planos e histórico
+            try {
+                [this.planos, this.cobrancas] = await Promise.all([
+                    FLOW.pagamentos("/planos/", { auth: false }),
+                    FLOW.listarPagamentos("/cobrancas/"),
+                ]);
+            } catch (e) { this.erroPagamentos = "API de pagamentos indisponível: " + e.message; }
+        },
+        async assinar(p) {
+            this.enviando = true;
+            try {
+                const c = await FLOW.pagamentos("/cobrancas/", { method: "POST", body: { plano: p.plano, return_url: location.href } });
+                location.href = c.checkout_url;   // simulador ou PIX do AbacatePay
+            } catch (e) { avisarNaTela(e.message, "erro"); this.enviando = false; }
+        },
+        async salvarEmpresa() {
+            try {
+                const { nome, cnpj, email, telefone } = this.empresa;
+                this.empresa = await FLOW.v1("/empresa/", { method: "PATCH", body: { nome, cnpj, email, telefone } });
+                avisarNaTela("Dados da empresa atualizados.");
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+    };
+}
+</script>
+{% endblock %}

@@ -1,0 +1,43 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Login{% endblock %}
+{% block protecao %}<script>if (FLOW.sessao.access && FLOW.sessao.usuario) location.href = "/";</script>{% endblock %}
+{% block corpo %}
+<div class="waves-top"></div>
+<div class="flow"></div>
+<div class="login-content" x-data="telaLogin()">
+    <h2>Faça seu Login</h2>
+    <p style="color:#ff6b6b;" x-show="erro" x-text="erro" x-cloak></p>
+    <p style="color:#ff6b6b;" x-show="aviso && aviso.tipo === 'erro'" x-text="aviso && aviso.texto" x-cloak></p>
+    <form @submit.prevent="entrar()">
+        <div class="form-group">
+            <label for="username">Usuário</label>
+            <input id="username" x-model="username" placeholder="Digite seu usuário" autocomplete="username" required>
+        </div>
+        <div class="form-group">
+            <label for="password">Senha</label>
+            <input id="password" type="password" x-model="password" placeholder="Digite sua senha" autocomplete="current-password" required>
+        </div>
+        <button class="blue-button-login" type="submit" :disabled="enviando" x-text="enviando ? 'Entrando...' : 'Entrar'">Entrar</button>
+    </form>
+    <p style="margin-top:18px;">Ainda não usa o FLOW? <a href="{% url 'registro' %}">Criar conta da empresa</a></p>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaLogin() {
+    return {
+        username: "", password: "", erro: "", enviando: false,
+        async entrar() {
+            this.erro = ""; this.enviando = true;
+            try {
+                await FLOW.login(this.username, this.password);
+                const proximo = new URLSearchParams(location.search).get("proximo");
+                location.href = proximo && proximo.startsWith("/") ? proximo : "/";
+            } catch (e) {
+                this.erro = e.status === 401 ? "Usuário ou senha incorretos." : e.message;
+            } finally { this.enviando = false; }
+        },
+    };
+}
+</script>
+{% endblock %}

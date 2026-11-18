@@ -38,8 +38,6 @@ CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 # ----------------------------------------------------------
 # URL pública do sistema (links de retorno do checkout)
 SITE_URL = os.getenv("SITE_URL", "http://127.0.0.1:8000")
-# Microserviço de pagamentos (endereço INTERNO, usado pelo web do servidor para o serviço)
-PAGAMENTOS_URL = os.getenv("PAGAMENTOS_URL", "http://127.0.0.1:8001").rstrip("/")
 # Caminho do JSON da conta de serviço do Firebase (opcional, para push no celular)
 FIREBASE_CREDENTIALS = os.getenv("FIREBASE_CREDENTIALS")
 
@@ -89,7 +87,6 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
-                'SISTEMA.context_processors.notificacoes',
             ],
         },
     },
@@ -121,13 +118,12 @@ TIME_ZONE = 'America/Sao_Paulo'
 USE_I18N = True
 USE_TZ = True
 
-STATIC_URL = 'static/'
-STATICFILES_DIRS = [os.path.join(BASE_DIR, 'static')]
+# As telas ficam no projeto WEB (front separado). Aqui só há estáticos do /admin e do Swagger.
+STATIC_URL = '/api-static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-LOGIN_URL = '/login/'
 AUTH_USER_MODEL = 'SISTEMA.Usuario'
 
 # ----------------------------------------------------------
@@ -136,7 +132,7 @@ AUTH_USER_MODEL = 'SISTEMA.Usuario'
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        'rest_framework.authentication.SessionAuthentication',  # p/ testar no Swagger logado no web
+        'rest_framework.authentication.SessionAuthentication',  # Swagger quando logado no /admin
     ),
     'DEFAULT_PERMISSION_CLASSES': ('rest_framework.permissions.IsAuthenticated',),
     'DEFAULT_FILTER_BACKENDS': (
@@ -144,8 +140,7 @@ REST_FRAMEWORK = {
         'rest_framework.filters.SearchFilter',
         'rest_framework.filters.OrderingFilter',
     ),
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'DEFAULT_PAGINATION_CLASS': 'api.pagination.Paginacao',
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
 

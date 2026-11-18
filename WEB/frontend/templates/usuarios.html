@@ -1,0 +1,63 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Usuários{% endblock %}
+{% block somente_admin %}true{% endblock %}
+{% block conteudo %}
+<div x-data="telaUsuarios()" x-init="carregar()">
+    <div class="top-bar">
+        <h1><img class="main-img" src="{% static 'img/users.png' %}"> Usuários</h1>
+        <input type="text" class="input-pesquisa" placeholder="🔍︎ Pesquisar..." x-model="busca">
+        <a class="right-top-button" href="{% url 'usuario_novo' %}"><img style="width:17px;height:17px;padding-right:10px;" src="{% static 'img/add.png' %}"> Adicionar</a>
+    </div>
+    <hr>
+    <p class="muted" x-show="plano" x-cloak>
+        Plano <strong x-text="plano && plano.plano_atual"></strong>:
+        <strong x-text="plano && plano.total_usuarios"></strong> de
+        <strong x-text="plano && (plano.limite_usuarios || 'ilimitados')"></strong> usuários ativos.
+    </p>
+    <p class="carregando" x-show="carregando">Carregando...</p>
+    <table x-show="!carregando" x-cloak>
+        <tr><th>Usuário</th><th>Nome</th><th>E-mail</th><th>Setor</th><th>Perfil</th><th>Situação</th><th>Ações</th></tr>
+        <template x-for="u in filtrados" :key="u.id">
+            <tr>
+                <td x-text="u.username"></td>
+                <td x-text="[u.first_name, u.last_name].join(' ').trim() || '—'"></td>
+                <td x-text="u.email || '—'"></td>
+                <td x-text="u.setor_detalhe ? u.setor_detalhe.nome : '—'"></td>
+                <td><span class="tag" :class="u.perfil === 'administrador' && 'admin'" x-text="FLOW.fmt.perfil(u.perfil)"></span></td>
+                <td><span class="tag" :class="!u.is_active && 'inativo'" x-text="u.is_active ? 'Ativo' : 'Inativo'"></span></td>
+                <td>
+                    <a class="a-detalhes" :href="'/usuarios/' + u.id + '/editar/'"><img src="{% static 'img/pen.png' %}"> Editar</a>
+                    <a class="a-excluir" x-show="u.id !== usuario.id" @click="excluir(u)"><img src="{% static 'img/trash.png' %}"> Excluir</a>
+                </td>
+            </tr>
+        </template>
+    </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaUsuarios() {
+    return {
+        usuarios: [], plano: null, busca: "", carregando: true,
+        get filtrados() {
+            const b = this.busca.toLowerCase();
+            return this.usuarios.filter((u) => !b || [u.username, u.first_name, u.last_name, u.email, u.setor_detalhe && u.setor_detalhe.nome].join(" ").toLowerCase().includes(b));
+        },
+        async carregar() {
+            try {
+                [this.usuarios, this.plano] = await Promise.all([FLOW.listar("/usuarios/"), FLOW.v1("/assinatura/")]);
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+            finally { this.carregando = false; }
+        },
+        async excluir(u) {
+            if (!confirm(`Excluir o usuário "${u.username}"? Dica: para só bloquear o acesso, edite e desmarque "Ativo".`)) return;
+            try {
+                await FLOW.v1(`/usuarios/${u.id}/`, { method: "DELETE" });
+                avisarNaTela(`Usuário "${u.username}" excluído.`);
+                this.carregar();
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+    };
+}
+</script>
+{% endblock %}

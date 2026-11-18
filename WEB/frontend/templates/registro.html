@@ -1,0 +1,39 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Criar conta{% endblock %}
+{% block protecao %}{% endblock %}
+{% block corpo %}
+<div class="main-content" style="margin-left:0; max-width:520px; margin:0 auto;" x-data="telaRegistro()">
+    <h1><a href="{% url 'login' %}"><img style="width:30px;height:30px;padding-right:3px;" src="{% static 'img/back.png' %}"></a> Criar conta da empresa</h1>
+    <hr>
+    <p class="muted">Cria a sua empresa no FLOW e o primeiro administrador, no plano Freemium.</p>
+    <form @submit.prevent="enviar()">
+        <div class="campo"><label>Nome da empresa *</label><input x-model="f.empresa_nome" required></div>
+        <div class="campo"><label>CNPJ</label><input x-model="f.empresa_cnpj" placeholder="00.000.000/0000-00"></div>
+        <div class="campo"><label>Seu nome</label><input x-model="f.first_name"></div>
+        <div class="campo"><label>E-mail *</label><input type="email" x-model="f.email" required></div>
+        <div class="campo"><label>Usuário (para entrar) *</label><input x-model="f.username" required></div>
+        <div class="campo"><label>Senha *</label><input type="password" x-model="f.password" required><small>Mínimo de 8 caracteres, não pode ser só números.</small></div>
+        <p class="erro-campo" x-show="erro" x-text="erro" x-cloak></p>
+        <button class="blue-button" type="submit" :disabled="enviando">Criar conta</button>
+    </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaRegistro() {
+    return {
+        f: { empresa_nome: "", empresa_cnpj: "", first_name: "", email: "", username: "", password: "" },
+        erro: "", enviando: false,
+        async enviar() {
+            this.erro = ""; this.enviando = true;
+            try {
+                await FLOW.v1("/auth/registro/", { method: "POST", body: this.f, auth: false });
+                await FLOW.login(this.f.username, this.f.password);
+                FLOW.avisar("Conta criada! Você é o administrador da empresa " + this.f.empresa_nome + ".");
+                location.href = "/";
+            } catch (e) { this.erro = e.message; } finally { this.enviando = false; }
+        },
+    };
+}
+</script>
+{% endblock %}

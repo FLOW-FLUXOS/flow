@@ -1,0 +1,89 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}{% if id %}Editar modelo{% else %}Novo modelo{% endif %}{% endblock %}
+{% block somente_admin %}true{% endblock %}
+{% block conteudo %}
+<div x-data="telaModelo({{ id|default:'null' }})" x-init="carregar()">
+    <h1><a href="{% url 'modelos' %}"><img style="width:30px;height:30px;padding-right:3px;" src="{% static 'img/back.png' %}"></a>
+        <span x-text="id ? 'Editar modelo de fluxo' : 'Novo modelo de fluxo'"></span></h1>
+    <hr>
+    <p class="carregando" x-show="carregando">Carregando...</p>
+    <form @submit.prevent="salvar()" x-show="!carregando" x-cloak>
+        <div class="campo"><label>Nome *</label><input x-model="m.nome" placeholder="Ex.: Solicitação de compra" required></div>
+        <div class="campo"><label>Descrição</label><input x-model="m.descricao"></div>
+        <p class="muted" x-show="id && totalFluxos" x-text="'Mudar as etapas não altera os ' + totalFluxos + ' fluxo(s) já criados com este modelo.'"></p>
+
+        <h3>Etapas <small class="muted">(nesta ordem)</small></h3>
+        <template x-for="(e, i) in m.etapas" :key="e.chave">
+            <div class="etapa-card" style="max-width:720px;">
+                <div class="cabecalho">
+                    <strong x-text="'Etapa ' + (i + 1)"></strong>
+                    <span>
+                        <button type="button" class="botao secundario pequeno" @click="mover(i, -1)" :disabled="i === 0" title="Subir">↑</button>
+                        <button type="button" class="botao secundario pequeno" @click="mover(i, 1)" :disabled="i === m.etapas.length - 1" title="Descer">↓</button>
+                        <button type="button" class="botao perigo pequeno" @click="m.etapas.splice(i, 1)" :disabled="m.etapas.length === 1">Remover</button>
+                    </span>
+                </div>
+                <div class="linha-campos">
+                    <div class="campo"><label>Nome da etapa *</label><input x-model="e.nome" placeholder="Ex.: Aprovação financeira" required></div>
+                    <div class="campo">
+                        <label>Setor que aprova</label>
+                        <select x-model="e.setor">
+                            <option value="">Qualquer setor</option>
+                            <template x-for="s in setores" :key="s.id"><option :value="s.id" x-text="s.nome" :selected="s.id == e.setor"></option></template>
+                        </select>
+                    </div>
+                    <div class="campo">
+                        <label>Quem aprova</label>
+                        <select x-model="e.perfil_aprovador">
+                            <option value="padrao">Usuários do setor</option>
+                            <option value="administrador">Somente administradores</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </template>
+        <button type="button" class="botao secundario" @click="adicionar()">+ Adicionar etapa</button>
+        <p class="erro-campo" x-show="erro" x-text="erro"></p>
+        <br><br>
+        <button class="blue-button" type="submit" :disabled="enviando" x-text="id ? 'Salvar modelo' : 'Criar modelo'"></button>
+    </form>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+let chaveEtapa = 0;
+const novaEtapa = (e = {}) => ({ chave: ++chaveEtapa, nome: e.nome || "", setor: e.setor || "", perfil_aprovador: e.perfil_aprovador || "padrao" });
+
+function telaModelo(id) {
+    return {
+        id, m: { nome: "", descricao: "", etapas: [novaEtapa()] }, setores: [], totalFluxos: 0,
+        erro: "", carregando: true, enviando: false,
+        async carregar() {
+            try {
+                this.setores = await FLOW.listar("/setores/");
+                if (id) {
+                    const m = await FLOW.v1(`/modelos/${id}/`);
+                    this.m = { nome: m.nome, descricao: m.descricao || "", etapas: m.etapas.map(novaEtapa) };
+                    this.totalFluxos = m.total_instancias;
+                }
+            } catch (e) { this.erro = e.message; }
+            finally { this.carregando = false; }
+        },
+        adicionar() { this.m.etapas.push(novaEtapa()); },
+        mover(i, d) { const [e] = this.m.etapas.splice(i, 1); this.m.etapas.splice(i + d, 0, e); },
+        async salvar() {
+            this.erro = ""; this.enviando = true;
+            const body = {
+                nome: this.m.nome, descricao: this.m.descricao,
+                etapas: this.m.etapas.map((e) => ({ nome: e.nome, setor: e.setor ? Number(e.setor) : null, perfil_aprovador: e.perfil_aprovador })),
+            };
+            try {
+                await FLOW.v1(id ? `/modelos/${id}/` : "/modelos/", { method: id ? "PATCH" : "POST", body });
+                FLOW.avisar(id ? `Modelo "${body.nome}" atualizado.` : `Modelo "${body.nome}" criado com ${body.etapas.length} etapa(s).`);
+                location.href = "/fluxos/modelos/";
+            } catch (e) { this.erro = e.message; } finally { this.enviando = false; }
+        },
+    };
+}
+</script>
+{% endblock %}

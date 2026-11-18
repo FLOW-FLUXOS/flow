@@ -1,0 +1,57 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Meu perfil{% endblock %}
+{% block conteudo %}
+<div x-data="telaPerfil()" x-init="carregar()">
+    <h1><img class="main-img" src="{% static 'img/pen.png' %}"> Meu perfil</h1>
+    <hr>
+    <div class="linha-campos">
+        <form @submit.prevent="salvar()" style="min-width:380px;">
+            <h3>Dados</h3>
+            <p class="muted">
+                Usuário <strong x-text="eu.username"></strong> ·
+                <span x-text="FLOW.fmt.perfil(eu.perfil)"></span> ·
+                Setor <span x-text="eu.setor_detalhe ? eu.setor_detalhe.nome : '—'"></span> ·
+                <span x-text="eu.empresa && eu.empresa.nome"></span>
+            </p>
+            <div class="campo"><label>Nome</label><input x-model="eu.first_name"></div>
+            <div class="campo"><label>Sobrenome</label><input x-model="eu.last_name"></div>
+            <div class="campo"><label>E-mail</label><input type="email" x-model="eu.email"></div>
+            <button class="botao" type="submit">Salvar dados</button>
+        </form>
+        <form @submit.prevent="trocarSenha()" style="min-width:380px;">
+            <h3>Trocar senha</h3>
+            <div class="campo"><label>Senha atual</label><input type="password" x-model="senha.senha_atual" required></div>
+            <div class="campo"><label>Nova senha</label><input type="password" x-model="senha.nova_senha" required></div>
+            <button class="botao" type="submit">Trocar senha</button>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaPerfil() {
+    return {
+        eu: {}, senha: { senha_atual: "", nova_senha: "" },
+        async carregar() {
+            try { this.eu = await FLOW.atualizarUsuario(); } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+        async salvar() {
+            try {
+                const { first_name, last_name, email } = this.eu;
+                this.eu = await FLOW.v1("/auth/me/", { method: "PATCH", body: { first_name, last_name, email } });
+                FLOW.sessao.salvar({ usuario: this.eu });
+                this.usuario = this.eu;
+                avisarNaTela("Dados atualizados.");
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+        async trocarSenha() {
+            try {
+                await FLOW.v1("/auth/trocar-senha/", { method: "POST", body: this.senha });
+                this.senha = { senha_atual: "", nova_senha: "" };
+                avisarNaTela("Senha alterada.");
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+    };
+}
+</script>
+{% endblock %}

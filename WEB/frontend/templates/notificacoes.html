@@ -1,0 +1,47 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Notificações{% endblock %}
+{% block conteudo %}
+<div x-data="telaNotificacoes()" x-init="carregar()">
+    <div class="top-bar">
+        <h1><img class="main-img" src="{% static 'img/clock.png' %}"> Notificações</h1>
+        <button class="right-top-button" style="border:0;cursor:pointer;" x-show="itens.some((n) => !n.lida)" @click="lerTodas()">Marcar todas como lidas</button>
+    </div>
+    <hr>
+    <p class="carregando" x-show="carregando">Carregando...</p>
+    <p class="vazio" x-show="!carregando && itens.length === 0" x-cloak>Nenhuma notificação.</p>
+    <template x-for="n in itens" :key="n.id">
+        <a class="notif" :class="!n.lida && 'nao-lida'" @click.prevent="abrir(n)">
+            <strong x-text="n.titulo"></strong><br>
+            <span x-text="n.mensagem"></span><br>
+            <small class="muted" x-text="FLOW.fmt.dataHora(n.criado_em)"></small>
+        </a>
+    </template>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaNotificacoes() {
+    return {
+        itens: [], carregando: true,
+        async carregar() {
+            try { this.itens = await FLOW.listar("/notificacoes/"); }
+            catch (e) { avisarNaTela(e.message, "erro"); }
+            finally { this.carregando = false; }
+        },
+        async abrir(n) {
+            try { if (!n.lida) await FLOW.v1(`/notificacoes/${n.id}/ler/`, { method: "POST" }); } catch { /* segue */ }
+            if (n.fluxo_instancia) location.href = `/fluxos/instancias/${n.fluxo_instancia}/`;
+            else { n.lida = true; window.dispatchEvent(new Event("flow:notificacoes")); }
+        },
+        async lerTodas() {
+            try {
+                const r = await FLOW.v1("/notificacoes/ler-todas/", { method: "POST" });
+                this.itens.forEach((n) => (n.lida = true));
+                window.dispatchEvent(new Event("flow:notificacoes"));
+                avisarNaTela(`${r.atualizadas} notificação(ões) marcada(s) como lida(s).`);
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+        },
+    };
+}
+</script>
+{% endblock %}

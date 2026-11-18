@@ -1,0 +1,52 @@
+{% load static %}<!DOCTYPE html>
+<html lang="pt-br" data-api="{{ FLOW_API_URL }}" data-pagamentos="{{ FLOW_PAGAMENTOS_URL }}">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block titulo %}FLOW{% endblock %} — FLOW</title>
+    <link rel="icon" href="{% static 'img/FLOW - ICONE.png' %}">
+    <link rel="stylesheet" href="{% static 'css/style.css' %}">
+    <link rel="stylesheet" href="{% static 'css/app.css' %}">
+    <style>@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@100..800&display=swap');</style>
+    <script src="{% static 'js/api.js' %}"></script>
+    {% block protecao %}<script>FLOW.exigirLogin({ admin: {% block somente_admin %}false{% endblock %} });</script>{% endblock %}
+    <script defer src="{% static 'js/alpine.min.js' %}"></script>
+</head>
+<body x-data="moldura()" x-init="iniciar()" @flow:aviso.window="mostrar($event.detail.texto, $event.detail.tipo)">
+{% block corpo %}
+    <div class="sidebar">
+        <a href="{% url 'home' %}"><img src="{% static 'img/icon.png' %}"><span class="tooltip" style="color:#2c5edc;border-color:#2c5edc;">Início</span></a>
+        <a href="#" @click.prevent="sair()" style="margin-bottom:5px;"><img src="{% static 'img/logout.png' %}"><span class="tooltip" style="color:#ff3b3b;border-color:#ff3b3b;">Sair</span></a>
+        <hr>
+        <a href="{% url 'fluxos' %}"><img src="{% static 'img/flow.png' %}"><span class="tooltip">Fluxos</span></a>
+        <a href="{% url 'notificacoes' %}">
+            <img src="{% static 'img/clock.png' %}">
+            <span class="badge" x-show="naoLidas > 0" x-text="naoLidas" x-cloak></span>
+            <span class="tooltip">Notificações</span>
+        </a>
+        <a href="{% url 'perfil' %}"><img src="{% static 'img/pen.png' %}"><span class="tooltip">Meu perfil</span></a>
+        <template x-if="usuario.is_admin">
+            <div style="display:flex;flex-direction:column;align-items:center;">
+                <hr>
+                <a href="{% url 'modelos' %}"><img src="{% static 'img/flou.png' %}"><span class="tooltip">Modelos de Fluxo</span></a>
+                <a href="{% url 'usuarios' %}"><img src="{% static 'img/users.png' %}"><span class="tooltip">Usuários</span></a>
+                <a href="{% url 'setores' %}"><img src="{% static 'img/department.png' %}"><span class="tooltip">Setores</span></a>
+                <a href="{% url 'planos' %}"><img src="{% static 'img/crown.png' %}"><span class="tooltip" style="color:#ffc700;border-color:#ffc700;">Planos</span></a>
+            </div>
+        </template>
+    </div>
+
+    <div class="main-content">
+        <template x-if="aviso">
+            <div class="aviso" :class="aviso.tipo">
+                <span x-text="aviso.texto"></span>
+                <button @click="aviso = null" title="Fechar">×</button>
+            </div>
+        </template>
+        {% block conteudo %}{% endblock %}
+    </div>
+    <div class="rodape-api">dados via API REST · /api/v1</div>
+{% endblock %}
+{% block scripts %}{% endblock %}
+</body>
+</html>

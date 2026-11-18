@@ -264,61 +264,13 @@ class EventosPagamentoTests(BaseAPITest):
         self.assertEqual(t["email"], "admin@x.com")
 
 
-class WebTests(BaseAPITest):
-    def login_web(self, user):
-        self.client.post("/login/", {"username": user.username, "password": SENHA})
-        self.assertIn("_auth_user_id", self.client.session)
-
-    def test_colaborador_entra_e_ve_fluxos_mas_nao_gestao(self):
-        self.criar_fluxo()
-        self.login_web(self.fin)
-        self.assertContains(self.client.get("/fluxos/instancias/"), "Compra de chapas")
-        r = self.client.get("/setores/")
-        self.assertRedirects(r, "/")
-        self.assertEqual(self.client.get("/users/").status_code, 302)
-
-    def test_colaborador_aprova_pelo_web_e_ve_notificacao(self):
-        fid = self.criar_fluxo()["id"]
-        inst = FluxoInstancia.objects.get(pk=fid)
-        self.login_web(self.eng)
-        with self.captureOnCommitCallbacks(execute=True):
-            self.client.post(f"/fluxos/instancias/{fid}/mover/{inst.etapa_atual.id}/", {"acao": "avancar"})
-        self.assertEqual(inst.etapa_atual.nome, "Aprovação financeira")
-        self.client.logout()
-        self.login_web(self.fin)
-        self.assertContains(self.client.get("/"), "aguardando sua aprovação")
-        self.assertContains(self.client.get("/notificacoes/"), "Aprovação pendente")
-
-    def test_colaborador_nao_aprova_etapa_de_outro_setor(self):
-        fid = self.criar_fluxo()["id"]
-        inst = FluxoInstancia.objects.get(pk=fid)
-        self.login_web(self.fin)
-        self.client.post(f"/fluxos/instancias/{fid}/mover/{inst.etapa_atual.id}/", {"acao": "avancar"})
-        self.assertEqual(inst.etapa_atual.nome, "Análise técnica")
-
-    def test_admin_ve_so_dados_da_empresa(self):
-        Setor.objects.create(empresa=self.outra, nome="Setor secreto")
-        self.login_web(self.admin)
-        r = self.client.get("/setores/")
-        self.assertContains(r, "Engenharia")
-        self.assertNotContains(r, "Setor secreto")
-
-    def test_planos_chama_microservico(self):
-        from unittest.mock import patch
-        self.login_web(self.admin)
-        cob = {"id": "x", "plano": "prata", "valor_formatado": "R$ 89,90", "status": "pendente",
-               "checkout_url": "http://pag/simulador/x/", "criado_em": "2026-11-10T10:00:00"}
-        with patch("SISTEMA.pagamentos_client.listar_cobrancas", return_value=[cob]):
-            self.assertContains(self.client.get("/assinatura/"), "R$ 89,90")
-        with patch("SISTEMA.pagamentos_client.criar_cobranca", return_value=cob) as m:
-            r = self.client.post("/checkout/prata/")
-            self.assertEqual(r.url, "http://pag/simulador/x/")
-            self.assertEqual(m.call_args.args[1], "prata")
-
-    def test_planos_com_microservico_fora_do_ar(self):
-        self.login_web(self.admin)
-        with self.settings(PAGAMENTOS_URL="http://127.0.0.1:9"):
-            self.assertContains(self.client.get("/assinatura/"), "fora do ar")
+class PaginacaoTests(BaseAPITest):
+    def test_page_size(self):
+        c = self.cliente(self.admin)
+        for i in range(25):
+            Setor.objects.create(empresa=self.empresa, nome=f"S{i}")
+        self.assertEqual(len(c.get("/api/v1/setores/").data["results"]), 20)
+        self.assertEqual(len(c.get("/api/v1/setores/?page_size=100").data["results"]), 27)
 
 
 class SchemaTests(TestCase):

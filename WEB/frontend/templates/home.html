@@ -1,0 +1,53 @@
+{% extends "base.html" %}{% load static %}
+{% block titulo %}Início{% endblock %}
+{% block conteudo %}
+<div x-data="telaInicio()" x-init="carregar()">
+    <h2 class="centerTEXT" style="margin-bottom:0;">Bem-vindo(a), <span x-text="usuario.first_name || usuario.username"></span>!</h2>
+    <p style="text-align:center; font-size:22px; margin-top:-10px;">
+        <span x-text="usuario.empresa && usuario.empresa.nome"></span>
+        <span class="tag" :class="usuario.is_admin && 'admin'" x-text="FLOW.fmt.perfil(usuario.perfil)" style="margin-left:8px;"></span>
+    </p>
+
+    <p class="carregando" style="text-align:center;" x-show="carregando">Carregando...</p>
+    <div class="cartoes" x-show="!carregando" x-cloak>
+        <a class="cartao" :class="pendentes > 0 && 'destaque'" href="{% url 'fluxos' %}?aba=pendentes">
+            <div class="numero" x-text="pendentes"></div>
+            <div>aguardando sua aprovação</div>
+        </a>
+        <a class="cartao" href="{% url 'fluxos' %}?aba=andamento">
+            <div class="numero" x-text="emAndamento"></div>
+            <div>fluxos em andamento</div>
+        </a>
+        <a class="cartao" href="{% url 'notificacoes' %}">
+            <div class="numero" x-text="naoLidas"></div>
+            <div>notificações não lidas</div>
+        </a>
+        <a class="cartao" href="{% url 'fluxo_novo' %}">
+            <div class="numero">+</div>
+            <div>criar um fluxo</div>
+        </a>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+function telaInicio() {
+    return {
+        carregando: true, pendentes: 0, emAndamento: 0,
+        async carregar() {
+            try {
+                // atualiza os dados do usuário (nome, empresa, plano) e os contadores
+                this.usuario = await FLOW.atualizarUsuario();
+                const [pend, anda] = await Promise.all([
+                    FLOW.v1("/fluxos/pendentes/"),
+                    FLOW.v1("/fluxos/?status=em_andamento"),
+                ]);
+                this.pendentes = pend.count;
+                this.emAndamento = anda.count;
+            } catch (e) { avisarNaTela(e.message, "erro"); }
+            finally { this.carregando = false; }
+        },
+    };
+}
+</script>
+{% endblock %}

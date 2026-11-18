@@ -4,6 +4,7 @@ __pycache__/
 FLUXO_APROVACAO/.env
 FLUXO_APROVACAO/staticfiles/
 PAGAMENTOS/staticfiles/
+WEB/staticfiles/
 .venv/
 venv/
 
