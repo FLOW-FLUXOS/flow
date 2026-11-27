@@ -1,0 +1,32 @@
+name: flow_app
+description: App mobile do FLOW (Fluxo de Aprovacao Sequencial)
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/img/waves.png
+    - assets/img/logo.png
+    - assets/img/flow.png
+    - assets/img/add.png
+    - assets/img/back.png
+    - assets/img/checkcircle.png
+    - assets/img/clock.png
+    - assets/img/crown.png
+    - assets/img/department.png
+    - assets/img/eye.png
+    - assets/img/logout.png
+    - assets/img/users.png
